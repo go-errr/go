@@ -7,19 +7,7 @@ type AbstractError struct {
 	*AbstractThrowable
 }
 
-func NewAbstractError(message string) *AbstractError {
-	return &AbstractError{
-		AbstractThrowable: NewAbstractThrowable(message, nil, nil),
-	}
-}
-
-func NewAbstractErrorFrom(message string, cause any) *AbstractError {
-	return &AbstractError{
-		AbstractThrowable: NewAbstractThrowable(message, cause, nil),
-	}
-}
-
-func NewAbstractErrorWith(message string, cause any, stackTrace []uintptr) *AbstractError {
+func NewAbstractError(message string, cause any, stackTrace []uintptr) *AbstractError {
 	return &AbstractError{
 		AbstractThrowable: NewAbstractThrowable(message, cause, stackTrace),
 	}

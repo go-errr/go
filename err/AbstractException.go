@@ -7,17 +7,7 @@ type AbstractException struct {
 	*AbstractThrowable
 }
 
-func NewAbstractException(message string) *AbstractException {
-	return &AbstractException{
-		AbstractThrowable: NewAbstractThrowable(message, nil, nil),
-	}
-}
-func NewAbstractExceptionFrom(message string, cause any) *AbstractException {
-	return &AbstractException{
-		AbstractThrowable: NewAbstractThrowable(message, cause, nil),
-	}
-}
-func NewAbstractExceptionWith(message string, cause any, stackTrace []uintptr) *AbstractException {
+func NewAbstractException(message string, cause any, stackTrace []uintptr) *AbstractException {
 	return &AbstractException{
 		AbstractThrowable: NewAbstractThrowable(message, cause, stackTrace),
 	}

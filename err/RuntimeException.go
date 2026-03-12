@@ -6,18 +6,18 @@ type RuntimeException struct {
 
 func NewRuntimeException(message string) *RuntimeException {
 	return &RuntimeException{
-		AbstractException: NewAbstractException(message),
+		AbstractException: NewAbstractException(message, nil, StackTrace(1)),
 	}
 }
 
 func NewRuntimeExceptionFrom(message string, cause any) *RuntimeException {
 	return &RuntimeException{
-		AbstractException: NewAbstractExceptionFrom(message, cause),
+		AbstractException: NewAbstractException(message, cause, StackTrace(1)),
 	}
 }
 
 func NewRuntimeExceptionWith(message string, cause any, stackTrace []uintptr) *RuntimeException {
 	return &RuntimeException{
-		AbstractException: NewAbstractExceptionWith(message, cause, stackTrace),
+		AbstractException: NewAbstractException(message, cause, stackTrace),
 	}
 }

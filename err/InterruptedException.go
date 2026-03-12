@@ -18,18 +18,18 @@ type InterruptedException struct {
 
 func NewInterruptedException(message string) *InterruptedException {
 	return &InterruptedException{
-		AbstractException: NewAbstractException(message),
+		AbstractException: NewAbstractException(message, nil, StackTrace(1)),
 	}
 }
 
 func NewInterruptedExceptionFrom(message string, cause any) *InterruptedException {
 	return &InterruptedException{
-		AbstractException: NewAbstractExceptionFrom(message, cause),
+		AbstractException: NewAbstractException(message, cause, StackTrace(1)),
 	}
 }
 
 func NewInterruptedExceptionWith(message string, cause any, stackTrace []uintptr) *InterruptedException {
 	return &InterruptedException{
-		AbstractException: NewAbstractExceptionWith(message, cause, stackTrace),
+		AbstractException: NewAbstractException(message, cause, stackTrace),
 	}
 }
