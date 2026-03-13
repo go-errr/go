@@ -116,7 +116,7 @@ func PrintStackTrace(e any) string {
 	}
 	e1, ok := e.(error)
 	if !ok {
-		return fmt.Sprintf("%T: %v", e, e)
+		return fmt.Sprint(e)
 	}
 	var b strings.Builder
 	for i := 0; e1 != nil; i++ {
