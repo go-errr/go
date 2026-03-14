@@ -4,12 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
-	"net"
 	"os"
 	"runtime"
 	"strings"
-	"syscall"
 )
 
 /*
@@ -107,37 +104,24 @@ func Repanic(handler ...func(any)) {
 	}
 }
 
+func Assert(condition bool, format string, args ...any) {
+	if !condition {
+		panic(NewAssertionError(fmt.Sprintf(format, args...)))
+	}
+}
+
 func Interrupted(err any) bool {
+	if err == nil {
+		return false
+	}
 	e, ok := err.(error)
 	if !ok {
 		return false
 	}
-	var ie *InterruptedException
-	if errors.As(e, &ie) {
-		return true
-	}
-	// client cancelled request, server stopped
-	if errors.Is(e, context.Canceled) || errors.Is(e, context.DeadlineExceeded) {
-		return true
-	}
-	// standard connection closed
-	if errors.Is(e, io.EOF) || errors.Is(e, net.ErrClosed) {
-		return true
-	}
-	// broken pipe / connection reset / connection aborted
-	var errno syscall.Errno
-	if errors.As(e, &errno) {
-		switch errno {
-		case syscall.EPIPE, syscall.ECONNRESET, syscall.ECONNABORTED:
-			return true
-		}
-	}
-	// wrapped broken pipe / connection reset / connection aborted
-	var se *os.SyscallError
-	if errors.As(e, &se) && (errors.Is(se.Err, syscall.EPIPE) || errors.Is(se.Err, syscall.ECONNRESET) || errors.Is(se.Err, syscall.ECONNABORTED)) {
-		return true
-	}
-	return false
+
+	var interrupted *InterruptedException
+	return errors.As(e, &interrupted) ||
+		errors.Is(e, context.Canceled)
 }
 
 func StackTrace(skipFrames ...int) []uintptr {
