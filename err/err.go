@@ -13,11 +13,27 @@ import (
 )
 
 /*
-Interrupt stack unwind and pass recovered panic to handler.
+Recover intercepts panic, runs recovery logic, and always stops panic propagation.
 
-Handler may swallow, or re-panic, but stack unwind is reliably stopped.
+Use at execution boundaries where panic must never escape, even if recovery
+logic itself fails.
 
-Must be used with defer.
+The handler may perform logging, rollback, cleanup, or business state changes.
+If the handler itself panics, fallback diagnostics are emitted, but unwind is
+still stopped.
+
+Example:
+
+	func runImportWorkerAsync(jobId string) {
+		go func() {
+			defer err.Recover(func(e any) {
+				markJobFailed(jobId)      // may panic
+				log.Error("import worker failed", e)
+			})
+
+			processImport(jobId) // may panic
+		}()
+	}
 */
 func Recover(handler ...func(any)) {
 	if e := recover(); e != nil {
@@ -37,11 +53,18 @@ func doHandle(e any, handler func(any)) {
 }
 
 /*
-Interrupt stack unwind and pass recovered panic to handler.
+	func ensureCacheDirectory(path string) {
+		defer err.Catch(func(e any) {
+			if errVal, ok := e.(error); ok && errors.Is(errVal, fs.ErrExist) {
+				log.Info("cache directory already exists", path)
+				return
+			}
 
-Handler may swallow, or re-panic which will drive stack unwind.
+			panic(err.NewRuntimeExceptionFrom("cannot prepare cache directory "+path, e))
+		})
 
-Must be used with defer.
+		createDirectory(path) // may panic
+	}
 */
 func Catch(handler ...func(any)) {
 	if e := recover(); e != nil {
@@ -52,16 +75,33 @@ func Catch(handler ...func(any)) {
 }
 
 /*
-Interrupt stack unwind and pass recovered panic to handler.
+Repanic intercepts panic, runs failure-only logic, and always continues propagation.
 
-Handler may swallow, or re-panic, but stack will continue to unwind.
+Unlike ordinary defer, the handler runs only during panic-driven unwind.
+The handler may rollback state, add context, or replace the panic value.
 
-Must be used with defer.
+Use for compensating actions or failure enrichment before escalation.
+
+Example:
+
+	func writeFile(path string, data []byte) {
+		defer err.Repanic(func(e any) {
+			_ = os.Remove(path) // remove partial file only on failure
+			panic(err.NewRuntimeExceptionFrom("cannot write file " + path, e)) // optional
+		})
+
+		createFile(path)
+		writeHeader(path, data) // may panic
+		writeBody(path, data) // may panic
+	}
 */
 func Repanic(handler ...func(any)) {
 	if e := recover(); e != nil {
 		for _, handler := range handler {
 			handler(e)
+		}
+		if _, ok := e.(interface{ StackTrace() []uintptr }); ok {
+			panic(e)
 		}
 		panic(NewRuntimeExceptionFrom("Unhandled exception", e))
 	}
