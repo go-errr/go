@@ -25,7 +25,7 @@ Example:
 		go func() {
 			defer err.Recover(func(e any) {
 				markJobFailed(jobId)      // may panic
-				log.Error("import worker failed", e)
+				slog.Error("import worker failed " + err.PrintStackTrace(e))
 			})
 
 			processImport(jobId) // may panic
@@ -53,7 +53,7 @@ func doHandle(e any, handler func(any)) {
 	func ensureCacheDirectory(path string) {
 		defer err.Catch(func(e any) {
 			if errVal, ok := e.(error); ok && errors.Is(errVal, fs.ErrExist) {
-				log.Info("cache directory already exists", path)
+				slog.Info("cache directory already exists " + path)
 				return
 			}
 
@@ -104,12 +104,114 @@ func Repanic(handler ...func(any)) {
 	}
 }
 
+/*
+Assert panics with AssertionError when condition is false.
+
+Use it for internal invariants and programmer assumptions.
+
+	err.Assert(port > 0, "invalid port: %d", port)
+*/
 func Assert(condition bool, format string, args ...any) {
 	if !condition {
 		panic(NewAssertionError(fmt.Sprintf(format, args...)))
 	}
 }
 
+/*
+Is is a convenience wrapper over errors.Is that accepts any and multiple targets.
+
+It returns true if err matches at least one target.
+
+	if err.Is(e, fs.ErrExist, os.ErrExist) {
+		return
+	}
+*/
+func Is(err any, targets ...error) bool {
+	e, ok := err.(error)
+	if !ok {
+		return false
+	}
+	for _, t := range targets {
+		if errors.Is(e, t) {
+			return true
+		}
+	}
+	return false
+}
+
+/*
+As is a generic wrapper over errors.As.
+
+It returns the matched typed error and true on success.
+
+	if pe, ok := err.As[*fs.PathError](e); ok {
+		slog.Warn("path error " + pe.Path)
+	}
+*/
+func As[T error](err any) (T, bool) {
+	var zero T
+	e, ok := err.(error)
+	if !ok {
+		return zero, false
+	}
+
+	var target T
+	if errors.As(e, &target) {
+		return target, true
+	}
+
+	return zero, false
+}
+
+/*
+AsAny checks whether err matches at least one target type using errors.As.
+
+Use it for Java-like multi-catch checks.
+
+	if err.AsAny(e,
+		err.Type[*err.IllegalStateException](),
+		err.Type[*err.IllegalArgumentException]()) {
+		return
+	}
+*/
+func AsAny(err any, targets ...any) bool {
+	e, ok := err.(error)
+	if !ok {
+		return false
+	}
+	for _, target := range targets {
+		if errors.As(e, target) {
+			return true
+		}
+	}
+	return false
+}
+
+/*
+Type creates a typed zero target for AsAny.
+
+It is a helper for concise type-based matching.
+
+	err.Type[*fs.PathError]()
+	err.Type[*err.RuntimeException]()
+*/
+func Type[T error]() *T {
+	var zero T
+	return &zero
+}
+
+/*
+Interrupted reports whether err represents a cooperative interruption signal.
+
+It returns true for InterruptedException and for context.Canceled.
+
+	defer err.Catch(func(e any) {
+		if err.Interrupted(e) {
+			return // silent cooperative stop
+		}
+		slog.Error("operation failed " + err.PrintStackTrace(e))
+	})
+*/
 func Interrupted(err any) bool {
 	if err == nil {
 		return false

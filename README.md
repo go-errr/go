@@ -40,7 +40,7 @@ func processImportAsync(jobId string) {
   go func() {
     defer err.Recover(func(e any) {
       markJobFailed(jobId) // may panic
-      log.Error("import worker failed", e)
+      slog.Error("import worker failed. " + err.PrintStackTrace(e))
     })
 
     processImport(jobId) // may panic
@@ -60,12 +60,11 @@ Example:
 ```go
 func ensureCacheDirectory(path string) {
   defer err.Catch(func(e any) {
-    if errVal, ok := e.(error); ok && errors.Is(errVal, fs.ErrExist) {
-      log.Info("cache directory already exists", path)
-      return
+    if err.Is(e, fs.ErrExist) {
+      slog.Info("cache directory already exists " + path)
+    } else {
+      panic(err.NewRuntimeExceptionFrom("cannot prepare cache directory " + path, e))
     }
-
-    panic(err.NewRuntimeExceptionFrom("cannot prepare cache directory " + path, e))
   })
 
   createDirectory(path) // may panic
