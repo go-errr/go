@@ -26,12 +26,13 @@ This package introduces **execution policy semantics** on top of it.
 
 ### err.Recover
 
-Recover intercepts panic, runs recovery logic, and always stops panic propagation.  
-Use at execution boundaries where panic must never escape, even if recovery
-logic itself fails.  
-The handler may perform logging, rollback, cleanup, or business state changes.
-If the handler itself panics, fallback diagnostics are emitted, but unwind is
-still stopped.
+Recover intercepts a panic, executes recovery logic, and always stops panic propagation.  
+Use it at execution boundaries where a panic must never escape, even if the recovery
+logic itself fails. For example, at the beginning of a new goroutine.  
+The handler may perform logging, rollback, cleanup, or business state updates.
+If the handler itself panics, stack unwinding is still stopped.  
+If no handler is provided, the default uncaught exception handler is used;
+otherwise, the stack trace is printed to stderr.
 
 Example:
 
