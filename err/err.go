@@ -15,29 +15,32 @@ type UncaughtExceptionHandler func(any)
 var defaultUncaughtExceptionHandler atomic.Value
 
 /*
-Recover intercepts a panic, executes recovery logic, and always stops panic propagation.
+Recover intercepts an uncaught panic at an outer execution boundary.
 
-Use it at execution boundaries where a panic must never escape, even if the recovery
-logic itself fails. For example, at the beginning of a new goroutine.
+It is intended primarily for goroutine entrypoints, background workers,
+schedulers, callbacks, and other asynchronous execution roots where an
+uncaught panic would otherwise terminate the whole process.
 
-The handler may perform logging, rollback, cleanup, or business state updates.
-If the handler itself panics, stack unwinding is still stopped.
+Recover must be used with defer.
 
-If no handler is provided, the default uncaught exception handler is used;
-otherwise, the stack trace is printed to stderr.
+If no handlers are provided, Recover delegates to the default uncaught
+exception handler. If no default handler is configured, a stack trace is
+printed to stderr.
 
-Example:
+Recover is a containment mechanism, not a business error handling tool.
+Local error classification and propagation policy should normally be
+implemented using err.Catch.
 
-	func runImportWorkerAsync(jobId string) {
-		go func() {
-			defer err.Recover(func(e any) {
-				markJobFailed(jobId)      // may panic
-				slog.Error("import worker failed " + err.PrintStackTrace(e))
-			})
+Typical usage:
 
-			processImport(jobId) // may panic
-		}()
-	}
+	go func() {
+		defer err.Recover(func(e any) {
+			slog.Error("Backup job crashed " + err.PrintStackTrace(e))
+			updateJobStatus()
+		})
+
+		runBackupJob()
+	}()
 */
 func Recover(handler ...func(any)) {
 	if e := recover(); e != nil {
@@ -62,57 +65,45 @@ func doHandle(e any, handler func(any)) {
 }
 
 /*
-	func ensureCacheDirectory(path string) {
-		defer err.Catch(func(e any) {
-			if errVal, ok := e.(error); ok && errors.Is(errVal, fs.ErrExist) {
-				slog.Info("cache directory already exists " + path)
-				return
-			}
+Catch intercepts a panic, passes the recovered value to the provided handler,
+and stops stack unwinding unless the handler explicitly re-panics.
 
-			panic(err.NewRuntimeExceptionFrom("cannot prepare cache directory "+path, e))
-		})
+Catch must be used with defer and is intended to be the primary panic handling
+mechanism in application code. It provides semantics similar to a Java
+`catch (Throwable e)` block.
 
-		createDirectory(path) // may panic
-	}
+The handler receives the original panic value (which may or may not implement
+error) and is fully responsible for deciding the propagation policy:
+
+  - swallow the panic and continue execution
+  - perform fallback logic
+  - wrap the panic into a domain or runtime exception
+  - log or emit metrics
+  - rethrow using panic(e) to continue unwinding
+
+Catch never re-panics automatically.
+
+Typical usage:
+
+	defer err.Catch(func(e any) {
+		switch {
+		case err.Is(e, context.Canceled, io.EOF):
+			slog.Info("operation stopped", "err", e)
+
+		case err.As2[*os.PathError, *net.OpError](e):
+			slog.Warn("external resource unavailable", "err", e)
+			scheduleRetry()
+
+		default:
+			panic(e)
+		}
+	})
 */
 func Catch(handler ...func(any)) {
 	if e := recover(); e != nil {
 		for _, handler := range handler {
 			handler(e)
 		}
-	}
-}
-
-/*
-Repanic intercepts panic, runs failure-only logic, and always continues propagation.
-
-Unlike ordinary defer, the handler runs only during panic-driven unwind.
-The handler may rollback state, add context, or replace the panic value.
-
-Use for compensating actions or failure enrichment before escalation.
-
-Example:
-
-	func writeFile(path string, data []byte) {
-		defer err.Repanic(func(e any) {
-			_ = os.Remove(path) // remove partial file only on failure
-			panic(err.NewRuntimeExceptionFrom("cannot write file " + path, e)) // optional
-		})
-
-		createFile(path)
-		writeHeader(path, data) // may panic
-		writeBody(path, data) // may panic
-	}
-*/
-func Repanic(handler ...func(any)) {
-	if e := recover(); e != nil {
-		for _, handler := range handler {
-			handler(e)
-		}
-		if _, ok := e.(interface{ StackTrace() []uintptr }); ok {
-			panic(e)
-		}
-		panic(NewRuntimeExceptionFrom("Unhandled exception", e))
 	}
 }
 
@@ -176,9 +167,121 @@ func As[T error](err any) (T, bool) {
 }
 
 /*
-AsAny checks whether err matches at least one target type using errors.As.
+As1 reports whether err matches T1 using errors.As.
+
+Use it in switch cases when only the match result matters.
+
+	if err.As1[*fs.PathError](e) {
+		return
+	}
+*/
+func As1[T1 error](err any) bool {
+	e, ok := err.(error)
+	if !ok {
+		return false
+	}
+	var t1 T1
+	return errors.As(e, &t1)
+}
+
+/*
+As2 reports whether err matches T1 or T2 using errors.As.
 
 Use it for Java-like multi-catch checks.
+
+	if err.As2[*err.IllegalStateException, *err.IllegalArgumentException](e) {
+		return
+	}
+*/
+func As2[T1 error, T2 error](err any) bool {
+	e, ok := err.(error)
+	if !ok {
+		return false
+	}
+	var t1 T1
+	if errors.As(e, &t1) {
+		return true
+	}
+	var t2 T2
+	return errors.As(e, &t2)
+}
+
+/*
+As3 reports whether err matches T1, T2, or T3 using errors.As.
+*/
+func As3[T1 error, T2 error, T3 error](err any) bool {
+	e, ok := err.(error)
+	if !ok {
+		return false
+	}
+	var t1 T1
+	if errors.As(e, &t1) {
+		return true
+	}
+	var t2 T2
+	if errors.As(e, &t2) {
+		return true
+	}
+	var t3 T3
+	return errors.As(e, &t3)
+}
+
+/*
+As4 reports whether err matches T1, T2, T3, or T4 using errors.As.
+*/
+func As4[T1 error, T2 error, T3 error, T4 error](err any) bool {
+	e, ok := err.(error)
+	if !ok {
+		return false
+	}
+	var t1 T1
+	if errors.As(e, &t1) {
+		return true
+	}
+	var t2 T2
+	if errors.As(e, &t2) {
+		return true
+	}
+	var t3 T3
+	if errors.As(e, &t3) {
+		return true
+	}
+	var t4 T4
+	return errors.As(e, &t4)
+}
+
+/*
+As5 reports whether err matches T1, T2, T3, T4, or T5 using errors.As.
+*/
+func As5[T1 error, T2 error, T3 error, T4 error, T5 error](err any) bool {
+	e, ok := err.(error)
+	if !ok {
+		return false
+	}
+	var t1 T1
+	if errors.As(e, &t1) {
+		return true
+	}
+	var t2 T2
+	if errors.As(e, &t2) {
+		return true
+	}
+	var t3 T3
+	if errors.As(e, &t3) {
+		return true
+	}
+	var t4 T4
+	if errors.As(e, &t4) {
+		return true
+	}
+	var t5 T5
+	return errors.As(e, &t5)
+}
+
+/*
+AsAny checks whether err matches at least one target type using errors.As.
+
+Use it when the number of target types is dynamic or greater than As5 supports.
 
 	if err.AsAny(e,
 		err.Type[*err.IllegalStateException](),
@@ -217,7 +320,7 @@ Interrupted reports whether err represents a cooperative interruption signal.
 
 It returns true for InterruptedException and for context.Canceled.
 
-	defer err.Catch(func(e any) {
+	defer err.Recover(func(e any) {
 		if err.Interrupted(e) {
 			return // silent cooperative stop
 		}

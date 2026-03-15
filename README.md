@@ -1,36 +1,60 @@
 # Exception Handling for Go
 
-This package provides a **three-polar panic control model** for Go applications.  
-It allows developers to **contain failures, execute recovery workflows, enrich errors, and control stack unwind behavior** in concurrent and service-oriented systems.  
+### Philosophy
 
-The model is built around three primitives:
+Failure handling is expressed through a single deferred handler that:
 
-- **Recover** — contain failure and stop panic propagation  
-- **Catch** — intercept failure and decide how unwind should proceed  
-- **Repanic** — run failure logic and continue panic propagation  
+- intercepts panic
+- classifies failure
+- decides propagation policy
 
-The goal is to make **failure handling explicit, structured, and safe for concurrent execution**.
+Unrecognized failures normally continue to unwind the stack.  
+This leads to readable and maintainable failure control flow:
 
-### Why
+```go
+defer err.Catch(func(e any) {
+  switch {
+  case err.Interrupted(e):
+    updateProcessingStatus(file.Name(), "CANCELLED")
+    panic(e) // rethrow interruption so higher levels can rollback too
 
-In large Go systems:
+  case err.As2[*os.PathError, *net.OpError](e):
+    slog.Warn("external resource unavailable")
+    scheduleRetry()
 
-- background goroutines must not crash the whole service  
-- failure often requires **compensating business logic**  
-- rollback code may itself fail  
-- some failures should not interrupt the flow  
-- some failures must propagate with additional context  
+  default:
+    updateProcessingStatus(file.Name(), "FAILED")
+    panic(e)
+  }
+})
+```
 
-Standard `recover()` is a low-level mechanism.  
-This package introduces **execution policy semantics** on top of it.
+**Catch** intercepts panic and lets the developer decide how unwind should proceed.
+The handler may run compensating logic, swallow the panic, or continue unwind
+with the same or a wrapped value.
+Use when failure handling is part of business logic.
 
-### err.Recover
+Example:
 
-Recover intercepts a panic, executes recovery logic, and always stops panic propagation.  
+```go
+func ensureCacheDirectory(path string) {
+  defer err.Catch(func(e any) {
+    if err.Is(e, fs.ErrExist) {
+      slog.Info("cache directory already exists " + path)
+      return
+    }
+    panic(err.NewRuntimeExceptionFrom("cannot prepare cache directory " + path, e))
+  })
+
+  createDirectory(path) // may panic
+}
+```
+
+**Recover** intercepts a panic, executes recovery logic, and always stops panic propagation.  
 Use it at execution boundaries where a panic must never escape, even if the recovery
-logic itself fails. For example, at the beginning of a new goroutine.  
+logic itself fails. For example, at the beginning of a new goroutine.
 The handler may perform logging, rollback, cleanup, or business state updates.
-If the handler itself panics, stack unwinding is still stopped.  
+If the handler itself panics, stack unwinding is still stopped.
 If no handler is provided, the default uncaught exception handler is used;
 otherwise, the stack trace is printed to stderr.
 
@@ -46,51 +70,6 @@ func processImportAsync(jobId string) {
 
     processImport(jobId) // may panic
   }()
-}
-```
-
-### err.Catch
-
-Catch intercepts panic and lets the developer decide how unwind should proceed.  
-The handler may run compensating logic, swallow the panic, or continue unwind
-with the same or a wrapped value.  
-Use when failure handling is part of business logic.
-
-Example:
-
-```go
-func ensureCacheDirectory(path string) {
-  defer err.Catch(func(e any) {
-    if err.Is(e, fs.ErrExist) {
-      slog.Info("cache directory already exists " + path)
-    } else {
-      panic(err.NewRuntimeExceptionFrom("cannot prepare cache directory " + path, e))
-    }
-  })
-
-  createDirectory(path) // may panic
-}
-```
-
-### err.Repanic
-
-Repanic intercepts panic, runs failure-only logic, and always continues propagation.  
-Unlike ordinary defer, the handler runs only during panic-driven unwind.
-The handler may rollback state, add context, or replace the panic value.  
-Use for compensating actions or failure enrichment before escalation.
-
-Example:
-
-```go
-func writeFile(path string, data []byte) {
-  defer err.Repanic(func(e any) {
-    _ = os.Remove(path) // remove partial file only on failure
-    panic(err.NewRuntimeExceptionFrom("cannot write file " + path, e)) // optional
-  })
-
-  createFile(path)
-  writeHeader(path, data) // may panic
-  writeBody(path, data) // may panic
 }
 ```
 
@@ -182,16 +161,16 @@ Example:
 
 ```go
 func doHeavyComputation(file os.File) {
-	defer err.Catch(func(e any) {
-		if err.Interrupted(e) {
-			updateProcessingStatus(file.Name(), "CANCELLED")
-			panic(e) // rethrow interruption so higher levels can rollback too
-		}
+  defer err.Catch(func(e any) {
+    if err.Interrupted(e) {
+      updateProcessingStatus(file.Name(), "CANCELLED")
+      panic(e) // rethrow interruption so higher levels can rollback too
+    }
 
-		updateProcessingStatus(file.Name(), "FAILED")
-		panic(err.NewRuntimeExceptionFrom("file processing failed "+file.Name(), e))
-	})
+    updateProcessingStatus(file.Name(), "FAILED")
+    panic(err.NewRuntimeExceptionFrom("file processing failed "+file.Name(), e))
+  })
 
-	processLineByLine(file) // may panic
+  processLineByLine(file) // may panic
 }
 ```

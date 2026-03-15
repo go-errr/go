@@ -64,49 +64,6 @@ func TestCatch_Panic(t *testing.T) {
 	}()
 }
 
-func TestRepanic_Swallow(t *testing.T) {
-	var handled any
-	defer func() {
-		r := recover()
-		assert.NotNil(t, r, "expected panic")
-
-		handledErr, _ := handled.(error)
-		assert.Equal(t, "boom", handledErr.Error())
-
-		repanickedErr, _ := r.(error)
-		assert.Equal(t, "Unhandled exception", repanickedErr.Error())
-	}()
-
-	func() {
-		defer err.Repanic(func(e any) {
-			handled = e
-		})
-		panic(errors.New("boom"))
-	}()
-}
-
-func TestRepanic_Repanic(t *testing.T) {
-	var handled any
-	defer func() {
-		r := recover()
-		assert.NotNil(t, r, "expected panic")
-
-		handledErr, _ := handled.(error)
-		assert.Equal(t, "boom", handledErr.Error())
-
-		repanickedErr, _ := r.(error)
-		assert.Equal(t, "boom", repanickedErr.Error())
-	}()
-
-	func() {
-		defer err.Repanic(func(e any) {
-			handled = e
-			panic(e)
-		})
-		panic(errors.New("boom"))
-	}()
-}
-
 func TestInterrupted(t *testing.T) {
 	tests := []struct {
 		name     string
