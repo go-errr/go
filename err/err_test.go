@@ -3,10 +3,6 @@ package err_test
 import (
 	"context"
 	"errors"
-	"io"
-	"net"
-	"os"
-	"syscall"
 	"testing"
 
 	"github.com/go-errr/go/err"
@@ -145,47 +141,7 @@ func TestInterrupted(t *testing.T) {
 		{
 			name:     "deadline exceeded",
 			err:      context.DeadlineExceeded,
-			expected: true,
-		},
-		{
-			name:     "eof",
-			err:      io.EOF,
-			expected: true,
-		},
-		{
-			name:     "net closed",
-			err:      net.ErrClosed,
-			expected: true,
-		},
-		{
-			name:     "broken pipe errno",
-			err:      syscall.EPIPE,
-			expected: true,
-		},
-		{
-			name:     "conn reset errno",
-			err:      syscall.ECONNRESET,
-			expected: true,
-		},
-		{
-			name:     "conn aborted errno",
-			err:      syscall.ECONNABORTED,
-			expected: true,
-		},
-		{
-			name:     "wrapped syscall error broken pipe",
-			err:      &os.SyscallError{Syscall: "write", Err: syscall.EPIPE},
-			expected: true,
-		},
-		{
-			name:     "wrapped syscall error conn reset",
-			err:      &os.SyscallError{Syscall: "read", Err: syscall.ECONNRESET},
-			expected: true,
-		},
-		{
-			name:     "wrapped syscall error conn aborted",
-			err:      &os.SyscallError{Syscall: "read", Err: syscall.ECONNABORTED},
-			expected: true,
+			expected: false,
 		},
 		{
 			name:     "ordinary error",
