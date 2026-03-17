@@ -49,7 +49,7 @@ func Recover(handler ...func(any)) {
 			if uncaughtExceptionHandler != nil {
 				uncaughtExceptionHandler(e)
 			} else {
-				fmt.Fprintf(os.Stderr, "Unhandled exception: %s\n", PrintStackTrace(e))
+				fmt.Fprintf(os.Stderr, "panic: %s\n", PrintStackTrace(e))
 			}
 			return
 		}
@@ -344,11 +344,16 @@ func Interrupted(err any) bool {
 func StackTrace(skipFrames ...int) []uintptr {
 	skip := 2
 	if len(skipFrames) > 0 {
-		skip = skipFrames[0] + 2
+		skip += skipFrames[0]
 	}
-	pcs := make([]uintptr, 32)
-	n := runtime.Callers(skip, pcs)
-	return append([]uintptr(nil), pcs[:n]...)
+	pcs := make([]uintptr, 64)
+	for {
+		n := runtime.Callers(skip, pcs)
+		if n < len(pcs) {
+			return append([]uintptr(nil), pcs[:n]...)
+		}
+		pcs = make([]uintptr, len(pcs)*2)
+	}
 }
 
 func PrintStackTrace(e any) string {
