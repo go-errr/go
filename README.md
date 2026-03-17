@@ -86,17 +86,17 @@ Stack traces can be printed in a clear and readable form, helping operators
 understand the failure impact without losing diagnostic depth.
 
     2026/03/14 02:21:23 ERROR Context refresh failed. *concurrent.ExecutionException: Some error
-            at github.com/go-beans/go/concurrent.(*Executor[...]).Submit (D:/dev/go-beans/concurrent/Executor.go:82)
-            at github.com/go-beans/go/ioc.(*ApplicationContext).startLifecycleBeans (D:/dev/go-beans/ioc/ApplicationContext.go:205)
-            at github.com/go-beans/go/ioc.(*ApplicationContext).Refresh (D:/dev/go-beans/ioc/ApplicationContext.go:172)
-            at github.com/go-beans/go/ioc.(*ApplicationContext).Run (D:/dev/go-beans/ioc/ApplicationContext.go:264)
+            at github.com/go-beans/go/concurrent.(*futureImpl[...]).Result (D:/dev/go-beans/concurrent/Executor.go:49)
+            at github.com/go-beans/go/ioc.(*ApplicationContext).startLifecycleBeans (D:/dev/go-beans/ioc/ApplicationContext.go:204)
+            at github.com/go-beans/go/ioc.(*ApplicationContext).Refresh (D:/dev/go-beans/ioc/ApplicationContext.go:165)
+            at github.com/go-beans/go/ioc.(*ApplicationContext).Run (D:/dev/go-beans/ioc/ApplicationContext.go:257)
             at github.com/go-beans/go/ioc.Run (D:/dev/go-beans/ioc/ioc.go:79)
-            at main.main (D:/dev/playground/cmd/app/main.go:27)
+            at main.main (D:/dev/playground/cmd/app/main.go:28)
     Caused by: *err.RuntimeException: Some error
             at playground/internal/app.(*Service2).Start (D:/dev/playground/internal/app/Service2.go:24)
-            at github.com/go-beans/go/ioc.(*ApplicationContext).startLifecycleBeans.func1 (D:/dev/go-beans/ioc/ApplicationContext.go:206)
-            at github.com/go-beans/go/concurrent.(*Executor[...]).Submit.func1 (D:/dev/go-beans/concurrent/Executor.go:87)
-            at github.com/go-beans/go/concurrent.NewExecutor[...].func1 (D:/dev/go-beans/concurrent/Executor.go:72)
+            at github.com/go-beans/go/ioc.(*ApplicationContext).startLifecycleBeans.func1 (D:/dev/go-beans/ioc/ApplicationContext.go:199)
+            at github.com/go-beans/go/ioc.(*ApplicationContext).startLifecycleBeans.(*Executor[...]).Submit.func2 (D:/dev/go-beans/concurrent/Executor.go:106)
+            at github.com/go-beans/go/concurrent.(*Executor[...]).runWorker.func1 (D:/dev/go-beans/concurrent/Executor.go:116)
 
 ### Error vs Exception
 
@@ -168,7 +168,7 @@ func doHeavyComputation(file os.File) {
     }
 
     updateProcessingStatus(file.Name(), "FAILED")
-    panic(err.NewRuntimeExceptionFrom("file processing failed "+file.Name(), e))
+    panic(err.NewRuntimeExceptionFrom("file processing failed " + file.Name(), e))
   })
 
   processLineByLine(file) // may panic
