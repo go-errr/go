@@ -1,5 +1,7 @@
 package err
 
+import "fmt"
+
 type NilPointerException struct {
 	*RuntimeException
 }
@@ -20,4 +22,8 @@ func NewNilPointerExceptionWith(message string, cause any, stackTrace []uintptr)
 	return &NilPointerException{
 		RuntimeException: NewRuntimeExceptionWith(message, cause, stackTrace),
 	}
+}
+
+func (this *NilPointerException) Format(s fmt.State, verb rune) {
+	this.DefaultFormat(s, verb, this)
 }

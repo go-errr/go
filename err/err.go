@@ -367,9 +367,9 @@ func PrintStackTrace(e any) string {
 	var b strings.Builder
 	for i := 0; e1 != nil; i++ {
 		if i == 0 {
-			fmt.Fprintf(&b, "%T: %v\n", e1, e1)
+			fmt.Fprintf(&b, "%T: %s\n", e1, e1.Error())
 		} else {
-			fmt.Fprintf(&b, "Caused by: %T: %v\n", e1, e1)
+			fmt.Fprintf(&b, "Caused by: %T: %s\n", e1, e1.Error())
 		}
 		if st, ok := e1.(interface{ StackTrace() []uintptr }); ok {
 			stack := formatStackTrace(st.StackTrace())

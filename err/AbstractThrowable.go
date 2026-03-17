@@ -2,6 +2,7 @@ package err
 
 import (
 	"fmt"
+	"io"
 )
 
 /*
@@ -46,4 +47,31 @@ func (this *AbstractThrowable) Unwrap() error {
 
 func (this *AbstractThrowable) StackTrace() []uintptr {
 	return this.stack
+}
+
+/*
+Default implementation of fmt.Formatter.
+
+Supported verbs:
+
+	%s  message
+	%v  message
+	%+v stack trace
+	%q  quoted message
+*/
+func (this *AbstractThrowable) DefaultFormat(s fmt.State, verb rune, e error) {
+	switch verb {
+	case 'v':
+		if s.Flag('+') {
+			io.WriteString(s, PrintStackTrace(e))
+		} else {
+			io.WriteString(s, e.Error())
+		}
+	case 's':
+		io.WriteString(s, e.Error())
+	case 'q':
+		fmt.Fprintf(s, "%q", e.Error())
+	default:
+		io.WriteString(s, e.Error())
+	}
 }

@@ -1,5 +1,7 @@
 package err
 
+import "fmt"
+
 /*
 InterruptedException represents a cooperative interruption signal.
 
@@ -32,4 +34,8 @@ func NewInterruptedExceptionWith(message string, cause any, stackTrace []uintptr
 	return &InterruptedException{
 		AbstractException: NewAbstractException(message, cause, stackTrace),
 	}
+}
+
+func (this *InterruptedException) Format(s fmt.State, verb rune) {
+	this.DefaultFormat(s, verb, this)
 }

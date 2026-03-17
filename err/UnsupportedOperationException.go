@@ -1,5 +1,7 @@
 package err
 
+import "fmt"
+
 type UnsupportedOperationException struct {
 	*RuntimeException
 }
@@ -20,4 +22,8 @@ func NewUnsupportedOperationExceptionWith(message string, cause any, stackTrace 
 	return &UnsupportedOperationException{
 		RuntimeException: NewRuntimeExceptionWith(message, cause, stackTrace),
 	}
+}
+
+func (this *UnsupportedOperationException) Format(s fmt.State, verb rune) {
+	this.DefaultFormat(s, verb, this)
 }

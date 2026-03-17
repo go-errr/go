@@ -1,5 +1,7 @@
 package err
 
+import "fmt"
+
 type RuntimeException struct {
 	*AbstractException
 }
@@ -20,4 +22,8 @@ func NewRuntimeExceptionWith(message string, cause any, stackTrace []uintptr) *R
 	return &RuntimeException{
 		AbstractException: NewAbstractException(message, cause, stackTrace),
 	}
+}
+
+func (this *RuntimeException) Format(s fmt.State, verb rune) {
+	this.DefaultFormat(s, verb, this)
 }

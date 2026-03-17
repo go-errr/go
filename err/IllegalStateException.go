@@ -1,5 +1,7 @@
 package err
 
+import "fmt"
+
 type IllegalStateException struct {
 	*RuntimeException
 }
@@ -20,4 +22,8 @@ func NewIllegalStateExceptionWith(message string, cause any, stackTrace []uintpt
 	return &IllegalStateException{
 		RuntimeException: NewRuntimeExceptionWith(message, cause, stackTrace),
 	}
+}
+
+func (this *IllegalStateException) Format(s fmt.State, verb rune) {
+	this.DefaultFormat(s, verb, this)
 }
