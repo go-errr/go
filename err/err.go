@@ -14,6 +14,15 @@ type UncaughtExceptionHandler func(any)
 
 var defaultUncaughtExceptionHandler atomic.Value
 
+const catchFunction = "github.com/go-errr/go/err.Catch"
+
+var hiddenFrames = map[string]struct{}{
+	"runtime.goexit":  {},
+	"runtime.main":    {},
+	"runtime.gopanic": {},
+	catchFunction:     {},
+}
+
 /*
 Recover intercepts an uncaught panic at an outer execution boundary.
 
@@ -53,6 +62,7 @@ func Recover(handler ...func(any)) {
 			}
 			return
 		}
+		Assert(len(handler) <= 1, "Multiple handlers are not supported in Recover")
 		for _, handler := range handler {
 			doHandle(e, handler)
 		}
@@ -101,6 +111,7 @@ Typical usage:
 */
 func Catch(handler ...func(any)) {
 	if e := recover(); e != nil {
+		Assert(len(handler) <= 1, "Multiple handlers are not supported in Catch")
 		for _, handler := range handler {
 			handler(e)
 		}
@@ -346,13 +357,13 @@ func StackTrace(skipFrames ...int) []uintptr {
 	if len(skipFrames) > 0 {
 		skip += skipFrames[0]
 	}
-	pcs := make([]uintptr, 64)
+	stack := make([]uintptr, 64)
 	for {
-		n := runtime.Callers(skip, pcs)
-		if n < len(pcs) {
-			return append([]uintptr(nil), pcs[:n]...)
+		n := runtime.Callers(skip, stack)
+		if n < len(stack) {
+			return append([]uintptr(nil), stack[:n]...)
 		}
-		pcs = make([]uintptr, len(pcs)*2)
+		stack = make([]uintptr, len(stack)*2)
 	}
 }
 
@@ -360,45 +371,140 @@ func PrintStackTrace(e any) string {
 	if e == nil {
 		return ""
 	}
-	e1, ok := e.(error)
+	root, ok := e.(error)
 	if !ok {
 		return fmt.Sprint(e)
 	}
+
+	var chain []error
+	var framesChain [][]runtime.Frame
+	for cur := root; cur != nil; cur = errors.Unwrap(cur) {
+		chain = append(chain, cur)
+		framesChain = append(framesChain, logicalFrames(stackTraceOf(cur)))
+	}
+
 	var b strings.Builder
-	for i := 0; e1 != nil; i++ {
+	for i, err := range chain {
 		if i == 0 {
-			fmt.Fprintf(&b, "%T: %s\n", e1, e1.Error())
+			fmt.Fprintf(&b, "%T: %s\n", err, err.Error())
 		} else {
-			fmt.Fprintf(&b, "Caused by: %T: %s\n", e1, e1.Error())
+			fmt.Fprintf(&b, "Caused by: %T: %s\n", err, err.Error())
 		}
-		if st, ok := e1.(interface{ StackTrace() []uintptr }); ok {
-			stack := formatStackTrace(st.StackTrace())
-			if stack != "" {
-				b.WriteString(stack)
-				b.WriteByte('\n')
+
+		frames := framesChain[i]
+		if len(frames) == 0 {
+			continue
+		}
+
+		if i == 0 {
+			writeFrames(&b, frames)
+		} else {
+			parentFrames := framesChain[i-1]
+			common := commonTailFrames(parentFrames, frames)
+			writeFrames(&b, frames[:len(frames)-common])
+			if common > 0 {
+				fmt.Fprintf(&b, "\t... %d common frames omitted\n", common)
 			}
 		}
-		e1 = errors.Unwrap(e1)
 	}
+
 	return strings.TrimRight(b.String(), "\n")
 }
 
-func formatStackTrace(pcs []uintptr) string {
-	if len(pcs) == 0 {
-		return ""
+func stackTraceOf(e error) []uintptr {
+	type stackTracer interface {
+		StackTrace() []uintptr
 	}
-	var b strings.Builder
-	frames := runtime.CallersFrames(pcs)
+	if st, ok := e.(stackTracer); ok {
+		return st.StackTrace()
+	}
+	return nil
+}
+
+func logicalFrames(stack []uintptr) []runtime.Frame {
+	if len(stack) == 0 {
+		return nil
+	}
+	frames := framesOf(stack)
+	frames = trimCatchCauseSegment(frames)
+	result := make([]runtime.Frame, 0, len(frames))
+	for _, frame := range frames {
+		if _, ok := hiddenFrames[frame.Function]; !ok {
+			result = append(result, frame)
+		}
+	}
+	return result
+}
+
+func framesOf(stack []uintptr) []runtime.Frame {
+	frames := runtime.CallersFrames(stack)
+	result := make([]runtime.Frame, 0, len(stack))
 	for {
 		frame, more := frames.Next()
-		if frame.Function != "runtime.goexit" && frame.Function != "runtime.main" {
-			fmt.Fprintf(&b, "\tat %s (%s:%d)\n", frame.Function, frame.File, frame.Line)
-		}
+		result = append(result, frame)
 		if !more {
 			break
 		}
 	}
-	return strings.TrimRight(b.String(), "\n")
+	return result
+}
+
+func trimCatchCauseSegment(frames []runtime.Frame) []runtime.Frame {
+	catchIdx := indexOfFunction(frames, catchFunction, 0)
+	if catchIdx <= 0 {
+		return frames
+	}
+
+	handlerFn := frames[catchIdx-1].Function
+	ownerFn, ok := enclosingOfDeferredHandler(handlerFn)
+	if !ok {
+		return frames
+	}
+
+	ownerIdx := indexOfFunction(frames, ownerFn, catchIdx+1)
+	if ownerIdx < 0 {
+		return frames
+	}
+
+	var res []runtime.Frame
+	res = append(res, frames[:catchIdx+2]...)
+	res = append(res, frames[ownerIdx:]...)
+	return res
+}
+
+func indexOfFunction(frames []runtime.Frame, fn string, startIdx int) int {
+	for i := startIdx; i < len(frames); i++ {
+		if frames[i].Function == fn {
+			return i
+		}
+	}
+	return -1
+}
+
+func enclosingOfDeferredHandler(fn string) (string, bool) {
+	idx := strings.LastIndex(fn, ".func")
+	if idx < 0 {
+		return "", false
+	}
+	return fn[:idx], true
+}
+
+func commonTailFrames(parent []runtime.Frame, child []runtime.Frame) int {
+	n := 0
+	i := len(parent) - 1
+	j := len(child) - 1
+	for i >= 0 && j >= 0 && parent[i] == child[j] {
+		n++
+		i--
+		j--
+	}
+	return n
+}
+
+func writeFrames(b *strings.Builder, frames []runtime.Frame) {
+	for _, frame := range frames {
+		fmt.Fprintf(b, "\tat %s (%s:%d)\n", frame.Function, frame.File, frame.Line)
+	}
 }
 
 func DefaultUncaughtExceptionHandler() UncaughtExceptionHandler {
