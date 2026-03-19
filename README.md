@@ -85,32 +85,32 @@ The base type **AbstractThrowable** supports:
 Stack traces can be printed in a clear and readable form, helping operators
 understand the failure impact without losing diagnostic depth.
 
-  2026/03/19 02:30:18 ERROR Context refresh failed. *concurrent.ExecutionException: Start failed
-          at github.com/go-beans/go/concurrent.(*futureImpl[...]).Result (D:/dev/go-beans/concurrent/Executor.go:49)
-          at github.com/go-beans/go/ioc.(*ApplicationContext).startLifecycleBeans (D:/dev/go-beans/ioc/ApplicationContext.go:204)
-          at github.com/go-beans/go/ioc.(*ApplicationContext).Refresh (D:/dev/go-beans/ioc/ApplicationContext.go:165)
-          at github.com/go-beans/go/ioc.(*ApplicationContext).Run (D:/dev/go-beans/ioc/ApplicationContext.go:257)
-          at github.com/go-beans/go/ioc.Run (D:/dev/go-beans/ioc/ioc.go:79)
-          at main.main (D:/dev/playground/cmd/app/main.go:28)
-  Caused by: *err.RuntimeException: Start failed
-          at playground/internal/app.(*Service2).handleException (D:/dev/playground/internal/app/Service2.go:34)
-          at playground/internal/app.(*Service2).Start.func1 (D:/dev/playground/internal/app/Service2.go:21)
-          at playground/internal/app.(*Service2).Start (D:/dev/playground/internal/app/Service2.go:29)
-          at github.com/go-beans/go/ioc.(*ApplicationContext).startLifecycleBeans.func1 (D:/dev/go-beans/ioc/ApplicationContext.go:199)
-          at github.com/go-beans/go/ioc.(*ApplicationContext).startLifecycleBeans.(*Executor[...]).Submit.func2 (D:/dev/go-beans/concurrent/Executor.go:106)
-          at github.com/go-beans/go/concurrent.(*Executor[...]).runWorker.func1 (D:/dev/go-beans/concurrent/Executor.go:116)
-  Caused by: *err.RuntimeException: doSomethingElse3 failed
-          at playground/internal/app.(*Service2).doSomethingElse3.func1 (D:/dev/playground/internal/app/Service2.go:51)
-          at playground/internal/app.(*Service2).doSomethingElse3 (D:/dev/playground/internal/app/Service2.go:53)
-          at playground/internal/app.(*Service2).doSomethingElse2 (D:/dev/playground/internal/app/Service2.go:46)
-          at playground/internal/app.(*Service2).doSomethingElse1 (D:/dev/playground/internal/app/Service2.go:42)
-          at playground/internal/app.(*Service2).doSomething (D:/dev/playground/internal/app/Service2.go:38)
-          ... 4 common frames omitted
-  Caused by: *err.RuntimeException: Some error
-          at playground/internal/app.(*Service2).doSomethingElse6 (D:/dev/playground/internal/app/Service2.go:65)
-          at playground/internal/app.(*Service2).doSomethingElse5 (D:/dev/playground/internal/app/Service2.go:61)
-          at playground/internal/app.(*Service2).doSomethingElse4 (D:/dev/playground/internal/app/Service2.go:57)
-          ... 8 common frames omitted
+    2026/03/19 02:30:18 ERROR Context refresh failed. *concurrent.ExecutionException: Start failed
+            at github.com/go-beans/go/concurrent.(*futureImpl[...]).Result (D:/dev/go-beans/concurrent/Executor.go:49)
+            at github.com/go-beans/go/ioc.(*ApplicationContext).startLifecycleBeans (D:/dev/go-beans/ioc/ApplicationContext.go:204)
+            at github.com/go-beans/go/ioc.(*ApplicationContext).Refresh (D:/dev/go-beans/ioc/ApplicationContext.go:165)
+            at github.com/go-beans/go/ioc.(*ApplicationContext).Run (D:/dev/go-beans/ioc/ApplicationContext.go:257)
+            at github.com/go-beans/go/ioc.Run (D:/dev/go-beans/ioc/ioc.go:79)
+            at main.main (D:/dev/playground/cmd/app/main.go:28)
+    Caused by: *err.RuntimeException: Start failed
+            at playground/internal/app.(*Service2).handleException (D:/dev/playground/internal/app/Service2.go:34)
+            at playground/internal/app.(*Service2).Start.func1 (D:/dev/playground/internal/app/Service2.go:21)
+            at playground/internal/app.(*Service2).Start (D:/dev/playground/internal/app/Service2.go:29)
+            at github.com/go-beans/go/ioc.(*ApplicationContext).startLifecycleBeans.func1 (D:/dev/go-beans/ioc/ApplicationContext.go:199)
+            at github.com/go-beans/go/ioc.(*ApplicationContext).startLifecycleBeans.(*Executor[...]).Submit.func2 (D:/dev/go-beans/concurrent/Executor.go:106)
+            at github.com/go-beans/go/concurrent.(*Executor[...]).runWorker.func1 (D:/dev/go-beans/concurrent/Executor.go:116)
+    Caused by: *err.RuntimeException: doSomethingElse3 failed
+            at playground/internal/app.(*Service2).doSomethingElse3.func1 (D:/dev/playground/internal/app/Service2.go:51)
+            at playground/internal/app.(*Service2).doSomethingElse3 (D:/dev/playground/internal/app/Service2.go:53)
+            at playground/internal/app.(*Service2).doSomethingElse2 (D:/dev/playground/internal/app/Service2.go:46)
+            at playground/internal/app.(*Service2).doSomethingElse1 (D:/dev/playground/internal/app/Service2.go:42)
+            at playground/internal/app.(*Service2).doSomething (D:/dev/playground/internal/app/Service2.go:38)
+            ... 4 common frames omitted
+    Caused by: *err.RuntimeException: Some error
+            at playground/internal/app.(*Service2).doSomethingElse6 (D:/dev/playground/internal/app/Service2.go:65)
+            at playground/internal/app.(*Service2).doSomethingElse5 (D:/dev/playground/internal/app/Service2.go:61)
+            at playground/internal/app.(*Service2).doSomethingElse4 (D:/dev/playground/internal/app/Service2.go:57)
+            ... 8 common frames omitted
 
 ### Error vs Exception
 
