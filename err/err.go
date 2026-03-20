@@ -371,9 +371,13 @@ func PrintStackTrace(e any) string {
 	if e == nil {
 		return ""
 	}
+
+	var b strings.Builder
 	root, ok := e.(error)
 	if !ok {
-		return fmt.Sprint(e)
+		fmt.Fprintf(&b, "%s\n", e)
+		writeFrames(&b, logicalFrames(StackTrace(1)))
+		return strings.TrimRight(b.String(), "\n")
 	}
 
 	var chain []error
@@ -383,22 +387,20 @@ func PrintStackTrace(e any) string {
 		framesChain = append(framesChain, logicalFrames(stackTraceOf(cur)))
 	}
 
-	var b strings.Builder
 	for i, err := range chain {
 		if i == 0 {
 			fmt.Fprintf(&b, "%T: %s\n", err, err.Error())
-		} else {
-			fmt.Fprintf(&b, "Caused by: %T: %s\n", err, err.Error())
-		}
-
-		frames := framesChain[i]
-		if len(frames) == 0 {
-			continue
-		}
-
-		if i == 0 {
+			frames := framesChain[i]
+			if len(frames) == 0 {
+				frames = logicalFrames(StackTrace(1))
+			}
 			writeFrames(&b, frames)
 		} else {
+			fmt.Fprintf(&b, "Caused by: %T: %s\n", err, err.Error())
+			frames := framesChain[i]
+			if len(frames) == 0 {
+				continue
+			}
 			parentFrames := framesChain[i-1]
 			common := commonTailFrames(parentFrames, frames)
 			writeFrames(&b, frames[:len(frames)-common])
