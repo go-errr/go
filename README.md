@@ -37,16 +37,15 @@ Use when failure handling is part of business logic.
 Example:
 
 ```go
-func ensureCacheDirectory(path string) {
+func processImport(jobId string) {
+  // do rollback/cleanup
   defer err.Catch(func(e any) {
-    if err.Is(e, fs.ErrExist) {
-      slog.Info("cache directory already exists " + path)
-      return
-    }
-    panic(err.NewRuntimeExceptionFrom("cannot prepare cache directory " + path, e))
+    markJobFailed(jobId) // may panic
+    panic(err.NewRuntimeExceptionFrom(fmt.Sprintf("Job %s failed", jodId), e))
   })
 
-  createDirectory(path) // may panic
+  processImport(jobId) // may panic
+  markJobSucceded(jobId) // may panic
 }
 ```
 
@@ -63,12 +62,14 @@ Example:
 ```go
 func processImportAsync(jobId string) {
   go func() {
+    // safe for go-routine
     defer err.Recover(func(e any) {
       markJobFailed(jobId) // may panic
-      slog.Error("import worker failed. " + err.PrintStackTrace(e))
+      slog.Error(fmt.Sprintf("Job %s failed. %s", jodId, err.PrintStackTrace(e)))
     })
 
     processImport(jobId) // may panic
+    markJobSucceded(jobId) // may panic
   }()
 }
 ```
