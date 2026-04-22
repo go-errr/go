@@ -15,24 +15,24 @@ Callers should use err.Interrupted to detect interruption conditions across
 wrapped error chains.
 */
 type InterruptedException struct {
-	*AbstractException
+	AbstractException
 }
 
 func NewInterruptedException(message string) *InterruptedException {
 	return &InterruptedException{
-		AbstractException: NewAbstractException(message, nil, StackTrace(1)),
+		AbstractException: *NewAbstractException(message, nil, StackTrace(1)),
 	}
 }
 
 func NewInterruptedExceptionFrom(message string, cause any) *InterruptedException {
 	return &InterruptedException{
-		AbstractException: NewAbstractException(message, cause, StackTrace(1)),
+		AbstractException: *NewAbstractException(message, cause, StackTrace(1)),
 	}
 }
 
 func NewInterruptedExceptionWith(message string, cause any, stackTrace []uintptr) *InterruptedException {
 	return &InterruptedException{
-		AbstractException: NewAbstractException(message, cause, stackTrace),
+		AbstractException: *NewAbstractException(message, cause, stackTrace),
 	}
 }
 
