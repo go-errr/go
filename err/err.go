@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"regexp"
 	"runtime"
 	"strings"
 	"sync/atomic"
@@ -14,6 +15,18 @@ type UncaughtExceptionHandler func(any)
 
 var defaultUncaughtExceptionHandler atomic.Value
 
+/*
+To get root cause stack trace of the runtime error, like nil pointer dereference, there is no other way but let stack unwind and kill the app.
+
+Set environment variable with comma separated list of snippets to look for in root cause error to skip recover.
+
+Readonly. NOT for production.
+
+	set ERR_RECOVER_DISABLED=runtime error
+*/
+var ERR_RECOVER_DISABLED = os.Getenv("ERR_RECOVER_DISABLED")
+var errRecoverDisabledList []string
+
 const catchFunction = "github.com/go-errr/go/err.Catch"
 
 var hiddenFrames = map[string]struct{}{
@@ -21,6 +34,15 @@ var hiddenFrames = map[string]struct{}{
 	"runtime.main":    {},
 	"runtime.gopanic": {},
 	catchFunction:     {},
+}
+
+func init() {
+	if len(ERR_RECOVER_DISABLED) > 0 {
+		delim := regexp.MustCompile(",")
+		for _, snippet := range delim.Split(ERR_RECOVER_DISABLED, -1) {
+			errRecoverDisabledList = append(errRecoverDisabledList, strings.TrimSpace(snippet))
+		}
+	}
 }
 
 /*
@@ -53,6 +75,9 @@ Typical usage:
 */
 func Recover(handler ...func(any)) {
 	if e := recover(); e != nil {
+		if recoverDisabled(e) {
+			panic(e)
+		}
 		if len(handler) == 0 {
 			uncaughtExceptionHandler := DefaultUncaughtExceptionHandler()
 			if uncaughtExceptionHandler != nil {
@@ -111,6 +136,9 @@ Typical usage:
 */
 func Catch(handler ...func(any)) {
 	if e := recover(); e != nil {
+		if recoverDisabled(e) {
+			panic(e)
+		}
 		Assert(len(handler) <= 1, "Multiple handlers are not supported in Catch")
 		for _, handler := range handler {
 			handler(e)
@@ -507,6 +535,38 @@ func writeFrames(b *strings.Builder, frames []runtime.Frame) {
 	for _, frame := range frames {
 		fmt.Fprintf(b, "\tat %s (%s:%d)\n", frame.Function, frame.File, frame.Line)
 	}
+}
+
+func recoverDisabled(e any) bool {
+	if len(errRecoverDisabledList) == 0 {
+		return false
+	}
+	message := rootCauseMessage(e)
+	for _, snippet := range errRecoverDisabledList {
+		if strings.Contains(message, snippet) {
+			return true
+		}
+	}
+	return false
+}
+
+func rootCauseMessage(e any) string {
+	var err error
+	switch v := e.(type) {
+	case error:
+		err = v
+	default:
+		return fmt.Sprint(e)
+	}
+
+	for {
+		cause := errors.Unwrap(err)
+		if cause == nil {
+			break
+		}
+		err = cause
+	}
+	return err.Error()
 }
 
 func DefaultUncaughtExceptionHandler() UncaughtExceptionHandler {
