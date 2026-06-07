@@ -87,7 +87,7 @@ func Recover(handler ...func(any)) {
 			}
 			return
 		}
-		Assert(len(handler) <= 1, "Multiple handlers are not supported in Recover")
+		assert(len(handler) <= 1, "Multiple handlers are not supported in Recover")
 		for _, handler := range handler {
 			doHandle(e, handler)
 		}
@@ -139,7 +139,7 @@ func Catch(handler ...func(any)) {
 		if recoverDisabled(e) {
 			panic(e)
 		}
-		Assert(len(handler) <= 1, "Multiple handlers are not supported in Catch")
+		assert(len(handler) <= 1, "Multiple handlers are not supported in Catch")
 		for _, handler := range handler {
 			handler(e)
 		}
@@ -147,14 +147,24 @@ func Catch(handler ...func(any)) {
 }
 
 /*
-Assert panics with AssertionError when condition is false.
+Assert verifies that the provided error is nil.
 
-Use it for internal invariants and programmer assumptions.
+If e is not nil, Assert panics with an AssertionError wrapping the original
+error and a formatted message.
 
-	err.Assert(port > 0, "invalid port: %d", port)
+Example:
+
+	err.Assert(os.MkdirAll(workDir, 0755), "Cannot create %s", workDir)
+	err.Assert(file.Close(), "Cannot close file %s", file.Name())
 */
-func Assert(condition bool, format string, args ...any) {
-	if !condition {
+func Assert(e error, format string, args ...any) {
+	if e != nil {
+		panic(NewAssertionErrorFrom(fmt.Sprintf(format, args...), e))
+	}
+}
+
+func assert(expression bool, format string, args ...any) {
+	if !expression {
 		panic(NewAssertionError(fmt.Sprintf(format, args...)))
 	}
 }
