@@ -86,32 +86,66 @@ The base type **AbstractThrowable** supports:
 Stack traces can be printed in a clear and readable form, helping operators
 understand the failure impact without losing diagnostic depth.
 
-    2026/03/19 02:30:18 ERROR Context refresh failed. *concurrent.ExecutionException: Start failed
-            at github.com/go-beans/go/concurrent.(*futureImpl[...]).Result (D:/dev/go-beans/concurrent/Executor.go:49)
-            at github.com/go-beans/go/ioc.(*ApplicationContext).startLifecycleBeans (D:/dev/go-beans/ioc/ApplicationContext.go:204)
-            at github.com/go-beans/go/ioc.(*ApplicationContext).Refresh (D:/dev/go-beans/ioc/ApplicationContext.go:165)
-            at github.com/go-beans/go/ioc.(*ApplicationContext).Run (D:/dev/go-beans/ioc/ApplicationContext.go:257)
-            at github.com/go-beans/go/ioc.Run (D:/dev/go-beans/ioc/ioc.go:79)
-            at main.main (D:/dev/playground/cmd/app/main.go:28)
-    Caused by: *err.RuntimeException: Start failed
-            at playground/internal/app.(*Service2).handleException (D:/dev/playground/internal/app/Service2.go:34)
-            at playground/internal/app.(*Service2).Start.func1 (D:/dev/playground/internal/app/Service2.go:21)
-            at playground/internal/app.(*Service2).Start (D:/dev/playground/internal/app/Service2.go:29)
-            at github.com/go-beans/go/ioc.(*ApplicationContext).startLifecycleBeans.func1 (D:/dev/go-beans/ioc/ApplicationContext.go:199)
-            at github.com/go-beans/go/ioc.(*ApplicationContext).startLifecycleBeans.(*Executor[...]).Submit.func2 (D:/dev/go-beans/concurrent/Executor.go:106)
-            at github.com/go-beans/go/concurrent.(*Executor[...]).runWorker.func1 (D:/dev/go-beans/concurrent/Executor.go:116)
-    Caused by: *err.RuntimeException: doSomethingElse3 failed
-            at playground/internal/app.(*Service2).doSomethingElse3.func1 (D:/dev/playground/internal/app/Service2.go:51)
-            at playground/internal/app.(*Service2).doSomethingElse3 (D:/dev/playground/internal/app/Service2.go:53)
-            at playground/internal/app.(*Service2).doSomethingElse2 (D:/dev/playground/internal/app/Service2.go:46)
-            at playground/internal/app.(*Service2).doSomethingElse1 (D:/dev/playground/internal/app/Service2.go:42)
-            at playground/internal/app.(*Service2).doSomething (D:/dev/playground/internal/app/Service2.go:38)
-            ... 4 common frames omitted
-    Caused by: *err.RuntimeException: Some error
-            at playground/internal/app.(*Service2).doSomethingElse6 (D:/dev/playground/internal/app/Service2.go:65)
-            at playground/internal/app.(*Service2).doSomethingElse5 (D:/dev/playground/internal/app/Service2.go:61)
-            at playground/internal/app.(*Service2).doSomethingElse4 (D:/dev/playground/internal/app/Service2.go:57)
-            ... 8 common frames omitted
+```
+2026/05/17 14:39:26 ERROR Context run failed. *err.RuntimeException: Error creating bean *app.ApplicationRunner1 [singleton lazy ApplicationRunner]
+        at github.com/go-beans/go/ioc.(*ApplicationContext).beanInstance.func1 (D:/dev/go-beans/ioc/ApplicationContext.go:140)
+        at github.com/go-beans/go/ioc.(*ApplicationContext).beanInstance (D:/dev/go-beans/ioc/ApplicationContext.go:149)
+        at github.com/go-beans/go/ioc.(*ApplicationContext).Bean (D:/dev/go-beans/ioc/ApplicationContext.go:133)
+        at github.com/go-beans/go/ioc.(*InjectQualifier[...]).doResolve (D:/dev/go-beans/ioc/InjectQualifier.go:60)
+        at github.com/go-beans/go/ioc.(*InjectQualifier[...]).resolve.func1.1 (D:/dev/go-beans/ioc/InjectQualifier.go:52)
+        at sync.(*Once).doSlow (C:/Program Files/Go/src/sync/once.go:78)
+        at sync.(*Once).Do (C:/Program Files/Go/src/sync/once.go:69)
+        at github.com/go-beans/go/ioc.(*InjectQualifier[...]).resolve.func1 (D:/dev/go-beans/ioc/InjectQualifier.go:51)
+        at github.com/go-beans/go/ioc.(*BeanDefinitionImpl[...]).instantiate.injectBeansAny.func2 (D:/dev/go-beans/ioc/ioc.go:84)
+        at github.com/go-external-config/go/util/reflects.ForEachTaggedField (D:/dev/go-external-config/util/reflects/reflects.go:39)
+        at github.com/go-beans/go/ioc.injectBeansAny (D:/dev/go-beans/ioc/ioc.go:76)
+        at github.com/go-beans/go/ioc.(*BeanDefinitionImpl[...]).instantiate (D:/dev/go-beans/ioc/BeanDefinition.go:240)
+        at github.com/go-beans/go/ioc.(*ApplicationContext).beanInstance.func2 (D:/dev/go-beans/ioc/ApplicationContext.go:152)
+        at github.com/go-external-config/go/util/concurrent.Synchronized (D:/dev/go-external-config/util/concurrent/concurrent.go:11)
+        at github.com/go-beans/go/ioc.(*ApplicationContext).beanInstance (D:/dev/go-beans/ioc/ApplicationContext.go:149)
+        at github.com/go-beans/go/ioc.(*ApplicationContext).orderedBeanInstances.func1 (D:/dev/go-beans/ioc/ApplicationContext.go:268)
+        at github.com/go-beans/go/ioc.(*ApplicationContext).foreachBeanDefinition (D:/dev/go-beans/ioc/ApplicationContext.go:427)
+        at github.com/go-beans/go/ioc.(*ApplicationContext).orderedBeanInstances (D:/dev/go-beans/ioc/ApplicationContext.go:266)
+        at github.com/go-beans/go/ioc.(*ApplicationContext).executeApplicationRunnerBeans (D:/dev/go-beans/ioc/ApplicationContext.go:320)
+        at github.com/go-beans/go/ioc.(*ApplicationContext).Run (D:/dev/go-beans/ioc/ApplicationContext.go:315)
+        at github.com/go-beans/go/ioc.Run (D:/dev/go-beans/ioc/ioc.go:135)
+        at main.main (D:/dev/playground/cmd/app/main.go:33)
+Caused by: *err.RuntimeException: Cannot inject dependency into field 'service1' of type *app.Service1
+        at github.com/go-beans/go/ioc.(*ApplicationContext).Bean.func1 (D:/dev/go-beans/ioc/ApplicationContext.go:85)
+        ... 20 common frames omitted
+Caused by: *err.RuntimeException: Error creating bean *app.Service1 [singleton lazy]
+        at github.com/go-beans/go/ioc.(*ApplicationContext).beanInstance.func1 (D:/dev/go-beans/ioc/ApplicationContext.go:140)
+        at github.com/go-beans/go/ioc.(*ApplicationContext).beanInstance (D:/dev/go-beans/ioc/ApplicationContext.go:149)
+        ... 20 common frames omitted
+Caused by: *err.RuntimeException: Cannot bind configuration value '${vault.prod/db#password}' to field 'dbPass'
+        at github.com/go-beans/go/ioc.(*BeanDefinitionImpl[...]).instantiate.BindPropertiesAny.func1.1 (D:/dev/go-external-config/env/env.go:58)
+        at github.com/go-external-config/go/util/optional.(*Optional[...]).panicIfEmpty (D:/dev/go-external-config/util/optional/Optional.go:80)
+        at github.com/go-external-config/go/util/optional.(*Optional[...]).OrElsePanic (D:/dev/go-external-config/util/optional/Optional.go:74)
+        at github.com/go-external-config/vault/env.(*VaultPropertySource).getSecretValue (D:/dev/go-external-config-vault/env/VaultPropertySource.go:84)
+        at github.com/go-external-config/vault/env.(*VaultPropertySource).resolveVaultProperty (D:/dev/go-external-config-vault/env/VaultPropertySource.go:80)
+        at github.com/go-external-config/vault/env.(*VaultPropertySource).Property (D:/dev/go-external-config-vault/env/VaultPropertySource.go:60)
+        at github.com/go-external-config/go/env.(*Environment).lookupRawProperty (D:/dev/go-external-config/env/Environment.go:81)
+        at github.com/go-external-config/go/env.(*ExprProcessor).Resolve (D:/dev/go-external-config/env/ExprProcessor.go:64)
+        at github.com/go-external-config/go/env.ExprProcessorOf.(*PatternProcessor).OverrideResolve.func1 (D:/dev/go-external-config/util/regex/PatternProcessor.go:68)
+        at github.com/go-external-config/go/util/regex.(*PatternProcessor).ProcessRecursive (D:/dev/go-external-config/util/regex/PatternProcessor.go:42)
+        at github.com/go-external-config/go/util/regex.(*PatternProcessor).Process (D:/dev/go-external-config/util/regex/PatternProcessor.go:24)
+        at github.com/go-external-config/go/env.(*Environment).ResolveRequiredPlaceholders (D:/dev/go-external-config/env/Environment.go:89)
+        at github.com/go-beans/go/ioc.(*BeanDefinitionImpl[...]).instantiate.BindPropertiesAny.func1 (D:/dev/go-external-config/env/env.go:60)
+        at github.com/go-external-config/go/util/reflects.ForEachTaggedField (D:/dev/go-external-config/util/reflects/reflects.go:39)
+        at github.com/go-external-config/go/env.BindPropertiesAny (D:/dev/go-external-config/env/env.go:56)
+        at github.com/go-beans/go/ioc.(*BeanDefinitionImpl[...]).instantiate (D:/dev/go-beans/ioc/BeanDefinition.go:239)
+        at github.com/go-beans/go/ioc.(*ApplicationContext).beanInstance.func2 (D:/dev/go-beans/ioc/ApplicationContext.go:152)
+        at github.com/go-external-config/go/util/concurrent.Synchronized (D:/dev/go-external-config/util/concurrent/concurrent.go:11)
+        ... 21 common frames omitted
+Caused by: *err.RuntimeException: Unable to get prod/db
+        at github.com/go-external-config/go/util/optional.(*Optional[...]).panicIfEmpty (D:/dev/go-external-config/util/optional/Optional.go:80)
+        ... 37 common frames omitted
+Caused by: *fmt.wrapError: error encountered while reading secret at secret/data/prod/db: Get "http://127.0.0.1:8200/v1/secret/data/prod/db": dial tcp 127.0.0.1:8200: connectex: No connection could be made because the target machine actively refused it.
+Caused by: *url.Error: Get "http://127.0.0.1:8200/v1/secret/data/prod/db": dial tcp 127.0.0.1:8200: connectex: No connection could be made because the target machine actively refused it.
+Caused by: *net.OpError: dial tcp 127.0.0.1:8200: connectex: No connection could be made because the target machine actively refused it.
+Caused by: *os.SyscallError: connectex: No connection could be made because the target machine actively refused it.
+Caused by: syscall.Errno: No connection could be made because the target machine actively refused it.
+```
 
 ### Error vs Exception
 
