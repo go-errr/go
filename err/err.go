@@ -26,7 +26,9 @@ Readonly. NOT for production.
 */
 var ERR_RECOVER_DISABLED = os.Getenv("ERR_RECOVER_DISABLED")
 var errRecoverDisabledList []string
+var parentEndingPattern = regexp.MustCompile(`:?[ \t]*$`)
 
+const causedBy = "Caused by: "
 const catchFunction = "github.com/go-errr/go/err.Catch"
 
 var hiddenFrames = map[string]struct{}{
@@ -134,15 +136,12 @@ Typical usage:
 		}
 	})
 */
-func Catch(handler ...func(any)) {
+func Catch(handler func(any)) {
 	if e := recover(); e != nil {
 		if recoverDisabled(e) {
 			panic(e)
 		}
-		assert(len(handler) <= 1, "Multiple handlers are not supported in Catch")
-		for _, handler := range handler {
-			handler(e)
-		}
+		handler(e)
 	}
 }
 
@@ -418,37 +417,90 @@ func PrintStackTrace(e any) string {
 		return strings.TrimRight(b.String(), "\n")
 	}
 
-	var chain []error
+	chain := errorChain(root)
+	messages := errorChainMessages(chain)
 	var framesChain [][]runtime.Frame
-	for cur := root; cur != nil; cur = errors.Unwrap(cur) {
-		chain = append(chain, cur)
-		framesChain = append(framesChain, logicalFrames(stackTraceOf(cur)))
+	for _, er := range chain {
+		framesChain = append(framesChain, logicalFrames(stackTraceOf(er)))
 	}
 
-	for i, err := range chain {
+	for i, er := range chain {
 		if i == 0 {
-			fmt.Fprintf(&b, "%T: %s\n", err, err.Error())
+			fmt.Fprintf(&b, "%T: %s\n", er, messages[i])
 			frames := framesChain[i]
 			if len(frames) == 0 {
 				frames = logicalFrames(StackTrace(1))
 			}
 			writeFrames(&b, frames)
-		} else {
-			fmt.Fprintf(&b, "Caused by: %T: %s\n", err, err.Error())
-			frames := framesChain[i]
-			if len(frames) == 0 {
-				continue
-			}
-			parentFrames := framesChain[i-1]
-			common := commonTailFrames(parentFrames, frames)
-			writeFrames(&b, frames[:len(frames)-common])
-			if common > 0 {
-				fmt.Fprintf(&b, "\t... %d common frames omitted\n", common)
-			}
+			continue
+		}
+		fmt.Fprintf(&b, "Caused by: %T: %s\n", er, messages[i])
+		frames := framesChain[i]
+		if len(frames) == 0 {
+			continue
+		}
+		parentFrames := framesChain[i-1]
+		common := commonTailFrames(parentFrames, frames)
+		writeFrames(&b, frames[:len(frames)-common])
+		if common > 0 {
+			fmt.Fprintf(&b, "\t... %d common frames omitted\n", common)
 		}
 	}
 
 	return strings.TrimRight(b.String(), "\n")
+}
+
+func PrintStackTraceSummary(e any) string {
+	switch v := e.(type) {
+	case nil:
+		return ""
+	case error:
+		chain := errorChain(v)
+		messages := errorChainMessages(chain)
+		var out []string
+		for _, msg := range messages {
+			if len(msg) == 0 {
+				continue
+			}
+			if len(out) == 0 {
+				out = append(out, msg)
+			} else {
+				out = append(out, causedBy+indentContinuationLines(msg, strings.Repeat(" ", len(causedBy))))
+			}
+		}
+		return strings.Join(out, "\n")
+	default:
+		return fmt.Sprint(e)
+	}
+}
+
+func errorChain(e error) []error {
+	var chain []error
+	for e != nil {
+		chain = append(chain, e)
+		e = errors.Unwrap(e)
+	}
+	return chain
+}
+
+func errorChainMessages(chain []error) []string {
+	messages := make([]string, len(chain))
+	for i, e := range chain {
+		msg := e.Error()
+		if i+1 < len(chain) {
+			childMessage := chain[i+1].Error()
+			if strings.HasSuffix(msg, childMessage) {
+				msg = msg[:len(msg)-len(childMessage)]
+				msg = parentEndingPattern.ReplaceAllString(msg, "")
+			}
+		}
+		messages[i] = msg
+	}
+	return messages
+}
+
+func indentContinuationLines(s string, prefix string) string {
+	return strings.ReplaceAll(s, "\n", "\n"+prefix)
 }
 
 func stackTraceOf(e error) []uintptr {
