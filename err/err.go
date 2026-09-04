@@ -48,6 +48,72 @@ func init() {
 }
 
 /*
+Try executes an action within a local panic handling boundary.
+
+Unlike Catch, which handles a panic escaping the current function, Try creates
+a bounded try/catch block inside a function. A panic raised by action is passed
+to handler and does not propagate unless the handler explicitly re-panics.
+
+Typical usage:
+
+	for message := range messages {
+		err.Try(func() {
+			processMessage(message)
+		}, func(e any) {
+			log4g.Error("Failed to process message {}", err.PrintStackTrace(e))
+		})
+	}
+*/
+func Try(action func(), handler func(any)) {
+	defer Catch(handler)
+	action()
+}
+
+/*
+Catch intercepts a panic, passes the recovered value to the provided handler,
+and stops stack unwinding unless the handler explicitly re-panics.
+
+Catch must be used with defer and is intended to be the primary panic handling
+mechanism in application code. It provides semantics similar to a Java
+`catch (Throwable e)` block.
+
+The handler receives the original panic value (which may or may not implement
+error) and is fully responsible for deciding the propagation policy:
+
+  - swallow the panic and continue execution
+  - perform fallback logic
+  - wrap the panic into a domain or runtime exception
+  - log or emit metrics
+  - rethrow using panic(e) to continue unwinding
+
+Catch never re-panics automatically.
+
+Typical usage:
+
+	defer err.Catch(func(e any) {
+		switch {
+		case err.Is(e, context.Canceled, io.EOF):
+			log4g.Info("operation stopped: {}", err.PrintStackTrace(e))
+
+		case err.As2[*os.PathError, *net.OpError](e):
+			log4g.Warn("external resource unavailable: {}", err.PrintStackTrace(e))
+			scheduleRetry()
+
+		default:
+			panic(e)
+		}
+	})
+*/
+func Catch(handler func(any)) {
+	if e := recover(); e != nil {
+		if recoverDisabled(e) {
+			panic(e)
+		}
+		handler(e)
+	}
+}
+
+/*
 Recover intercepts an uncaught panic at an outer execution boundary.
 
 It is intended primarily for goroutine entrypoints, background workers,
@@ -68,7 +134,7 @@ Typical usage:
 
 	go func() {
 		defer err.Recover(func(e any) {
-			slog.Error("Backup job crashed " + err.PrintStackTrace(e))
+			log4g.Error("Backup job crashed: {}", err.PrintStackTrace(e))
 			updateJobStatus()
 		})
 
@@ -99,50 +165,6 @@ func Recover(handler ...func(any)) {
 func doHandle(e any, handler func(any)) {
 	defer Recover()
 	handler(e)
-}
-
-/*
-Catch intercepts a panic, passes the recovered value to the provided handler,
-and stops stack unwinding unless the handler explicitly re-panics.
-
-Catch must be used with defer and is intended to be the primary panic handling
-mechanism in application code. It provides semantics similar to a Java
-`catch (Throwable e)` block.
-
-The handler receives the original panic value (which may or may not implement
-error) and is fully responsible for deciding the propagation policy:
-
-  - swallow the panic and continue execution
-  - perform fallback logic
-  - wrap the panic into a domain or runtime exception
-  - log or emit metrics
-  - rethrow using panic(e) to continue unwinding
-
-Catch never re-panics automatically.
-
-Typical usage:
-
-	defer err.Catch(func(e any) {
-		switch {
-		case err.Is(e, context.Canceled, io.EOF):
-			slog.Info("operation stopped", "err", e)
-
-		case err.As2[*os.PathError, *net.OpError](e):
-			slog.Warn("external resource unavailable", "err", e)
-			scheduleRetry()
-
-		default:
-			panic(e)
-		}
-	})
-*/
-func Catch(handler func(any)) {
-	if e := recover(); e != nil {
-		if recoverDisabled(e) {
-			panic(e)
-		}
-		handler(e)
-	}
 }
 
 /*
