@@ -407,8 +407,7 @@ func Interrupted(err any) bool {
 	}
 
 	var interrupted *InterruptedException
-	return errors.As(e, &interrupted) ||
-		errors.Is(e, context.Canceled)
+	return errors.As(e, &interrupted) || errors.Is(e, context.Canceled)
 }
 
 func StackTrace(skipFrames ...int) []uintptr {
@@ -634,23 +633,25 @@ func recoverDisabled(e any) bool {
 	return false
 }
 
-func rootCauseMessage(e any) string {
-	var err error
-	switch v := e.(type) {
-	case error:
-		err = v
-	default:
-		return fmt.Sprint(e)
+func RootCause(e any) any {
+	if e == nil {
+		return nil
 	}
-
+	root, ok := e.(error)
+	if !ok {
+		return e
+	}
 	for {
-		cause := errors.Unwrap(err)
+		cause := errors.Unwrap(root)
 		if cause == nil {
-			break
+			return root
 		}
-		err = cause
+		root = cause
 	}
-	return err.Error()
+}
+
+func rootCauseMessage(e any) string {
+	return fmt.Sprint(RootCause(e))
 }
 
 func DefaultUncaughtExceptionHandler() UncaughtExceptionHandler {
