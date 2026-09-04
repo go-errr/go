@@ -170,6 +170,26 @@ go func() {
 
 In all cases, a panic handled by `Recover` does not escape the recovery boundary.
 
+# Diagnosing Runtime Panics
+
+Some Go runtime panics, such as a nil pointer dereference, do not carry their original stack trace as part of the panic value. If such a panic reaches `Recover`, the panic can be contained, but the runtime no longer gets an opportunity to terminate the process and print its native panic stack trace.
+
+This can make rare runtime failures difficult to diagnose. For example, a default uncaught exception handler may only see a value such as:
+
+```text
+runtime error: invalid memory address or nil pointer dereference
+```
+
+For diagnostic purposes, recovery can be selectively disabled using the `ERR_RECOVER_DISABLED` environment variable. The value is a comma-separated list of text fragments matched against the root-cause panic message:
+
+```bash
+ERR_RECOVER_DISABLED=runtime error
+```
+
+When a matching panic reaches `Catch` or `Recover`, it is rethrown instead of being handled. If it escapes the goroutine, the Go runtime terminates the process and prints its native panic stack trace, exposing the original failure location.
+
+This option is intended for reproducing and diagnosing failures that cannot otherwise be located. It deliberately defeats panic containment and may terminate the application, so it should **not be enabled in production**.
+
 
 # Stack Traces and Exception Hierarchy
 
