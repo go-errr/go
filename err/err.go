@@ -508,7 +508,8 @@ func errorChainMessages(chain []error) []string {
 	messages := make([]string, len(chain))
 	for i, e := range chain {
 		msg := e.Error()
-		if i+1 < len(chain) {
+		_, throwable := e.(stackTrace)
+		if i+1 < len(chain) && !throwable {
 			childMessage := chain[i+1].Error()
 			if strings.HasSuffix(msg, childMessage) {
 				msg = msg[:len(msg)-len(childMessage)]
@@ -525,10 +526,7 @@ func indentContinuationLines(s string, prefix string) string {
 }
 
 func stackTraceOf(e error) []uintptr {
-	type stackTracer interface {
-		StackTrace() []uintptr
-	}
-	if st, ok := e.(stackTracer); ok {
+	if st, ok := e.(stackTrace); ok {
 		return st.StackTrace()
 	}
 	return nil

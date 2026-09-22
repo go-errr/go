@@ -5,6 +5,13 @@ import (
 	"io"
 )
 
+type stackTrace interface {
+	StackTrace() []uintptr
+}
+
+var _ error = (error)(nil)
+var _ stackTrace = (*AbstractThrowable)(nil)
+
 /*
 The Throwable is the superclass of all errors and exceptions.
 
