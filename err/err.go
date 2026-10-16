@@ -511,9 +511,12 @@ func errorChainMessages(chain []error) []string {
 		_, throwable := e.(stackTrace)
 		if i+1 < len(chain) && !throwable {
 			childMessage := chain[i+1].Error()
-			if strings.HasSuffix(msg, childMessage) {
-				msg = msg[:len(msg)-len(childMessage)]
-				msg = parentEndingPattern.ReplaceAllString(msg, "")
+			if childMessage != "" && strings.HasSuffix(msg, childMessage) {
+				parentMessage := msg[:len(msg)-len(childMessage)]
+				parentMessage = parentEndingPattern.ReplaceAllString(parentMessage, "")
+				if parentMessage != "" {
+					msg = parentMessage
+				}
 			}
 		}
 		messages[i] = msg
