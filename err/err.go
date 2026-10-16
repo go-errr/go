@@ -480,7 +480,10 @@ func PrintStackTraceSummary(e any) string {
 		messages := errorChainMessages(chain)
 		var out []string
 		for _, msg := range messages {
-			if len(msg) == 0 {
+			if msg == "" {
+				continue
+			}
+			if len(out) > 0 && msg == messages[0] {
 				continue
 			}
 			if len(out) == 0 {
