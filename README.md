@@ -5,20 +5,23 @@ Go's explicit error returns make failures visible at each operation. This works 
 Consider processing files in a loop. Opening, reading, parsing, storing, and publishing each file may fail:
 
 ```go
-func processFiles(paths []string) {
-	for _, path := range paths {
-		if e := processFile(path); e != nil {
-			if errors.Is(e, context.Canceled) {
-				return
-			}
-			var parseError *ParseError
-			if errors.As(e, &parseError) {
-				log4g.Error("Cannot process file {}: {}", path, err.PrintStackTrace(e))
-				continue
-			}
-			log4g.Error("Failed to process file {}: {}", path, err.PrintStackTrace(e))
-		}
-	}
+func processFiles(paths []string) error {
+  for _, path := range paths {
+    if e := processFile(path); e != nil {
+      if errors.Is(e, context.Canceled) {
+        return e
+      }
+
+      var parseError *ParseError
+      if errors.As(e, &parseError) {
+        log4g.Error("Cannot parse file {}: {}", path, err.PrintStackTrace(e))
+        continue
+      }
+
+      return fmt.Errorf("Failed to process file %s: %w", path, e)
+    }
+  }
+  return nil
 }
 
 func processFile(path string) error {
@@ -54,43 +57,49 @@ The regular flow of `processFile` is simple:
 open → read → parse → save → publish
 ```
 
-but it is interleaved with repetitive error checking and propagation. The caller then needs another layer of error classification to decide whether processing should continue.
+However, it is interleaved with repetitive error checking and propagation. The caller must also classify failures and decide how to handle them.
 
-With `err.Catch`, failure handling can be separated from the regular processing code:
+There are three possible failure scenarios:
+
+- **Interruption** — Processing is cancelled. The interruption propagates to higher levels without additional handling.
+- **Expected error** — A known, recoverable failure occurs, such as invalid file content. The error is logged, and processing continues with the next file.
+- **Unexpected error** — An unexpected failure occurs, such as a repository or publishing failure. The error is wrapped with additional context and propagated to higher levels, terminating processing.
+
+With `err.Catch`, error-handling logic is separated from the regular processing flow.
 
 ```go
 func processFiles(paths []string) {
-	for _, path := range paths {
-		processFile(path)
-	}
+  for _, path := range paths {
+    processFile(path)
+  }
 }
 
 func processFile(path string) {
-	defer err.Catch(func(e any) {
-		switch {
-		case err.Interrupted(e):
-			panic(e)
-		case err.As1[*ParseError](e):
-			log4g.Error("Cannot process file {}: {}", path, err.PrintStackTrace(e))
-		default:
-			log4g.Error("Failed to process file {}: {}", path, err.PrintStackTrace(e))
-		}
-	})
+  defer err.Catch(func(e any) {
+    switch {
+    case err.Interrupted(e):
+      panic(e)
+    case err.As1[*ParseError](e):
+      log4g.Error("Cannot parse file {}: {}", path, err.PrintStackTrace(e))
+    default:
+      panic(err.NewRuntimeExceptionFrom(fmt.Sprintf("Failed to process file %s", path), e))
+    }
+  })
 
-	file := optional.OfCommaErr(os.Open(path)).OrElsePanic("Cannot open file %s", path)
-	defer file.Close()
-	content := optional.OfCommaErr(io.ReadAll(file)).OrElsePanic("Cannot read file %s", path)
-	data := optional.OfCommaErr(parse(content)).OrElsePanic("Cannot parse file %s", path)
-	err.Assert(repository.Save(data), "Cannot save data")
-	err.Assert(publisher.Publish(data), "Cannot publish data")
+  file := optional.OfCommaErr(os.Open(path)).OrElsePanic("Cannot open file %s", path)
+  defer file.Close()
+  content := optional.OfCommaErr(io.ReadAll(file)).OrElsePanic("Cannot read file %s", path)
+  data := optional.OfCommaErr(parse(content)).OrElsePanic("Cannot parse file %s", path)
+  err.Assert(repository.Save(data), "Cannot save data")
+  err.Assert(publisher.Publish(data), "Cannot publish data")
 }
 ```
 
 The main body now describes the successful path directly. Failure handling is concentrated in one place and expresses the actual policy of the method:
 
-* interruption is rethrown so that higher execution levels can stop processing;
-* known failures can be handled with a specific message;
-* unexpected failures are logged with a general error and consumed, allowing the loop to continue with the next file.
+- **Interruption** is rethrown so that higher execution levels can handle cancellation;
+- **Expected failures** are logged and consumed, allowing processing to continue with the next file;
+- **Unexpected failures** are wrapped with additional context and rethrown, terminating processing and delegating error handling to higher execution levels.
 
 This does not eliminate error handling. Failures are still detected, classified, logged, or propagated as appropriate. The difference is that error-handling policy no longer obscures the regular control flow.
 
@@ -104,11 +113,11 @@ Use `Try` when failure handling applies to a specific operation or block inside 
 
 ```go
 for message := range messages {
-	err.Try(func() {
-		processMessage(message)
-	}, func(e any) {
-		logProcessingError(e)
-	})
+  err.Try(func() {
+    processMessage(message)
+  }, func(e any) {
+    logProcessingError(e)
+  })
 }
 ```
 
@@ -122,12 +131,12 @@ Use `Catch` when failure handling applies to the function as a whole.
 
 ```go
 func processImport(jobId string) {
-	defer err.Catch(func(e any) {
-		markJobFailed(jobId)
-		panic(err.NewRuntimeExceptionFrom(fmt.Sprintf("Job %s failed", jobId), e))
-	})
-	processImportFile(jobId)
-	markJobSucceeded(jobId)
+  defer err.Catch(func(e any) {
+    markJobFailed(jobId)
+    panic(err.NewRuntimeExceptionFrom(fmt.Sprintf("Job %s failed", jobId), e))
+  })
+  processImportFile(jobId)
+  markJobSucceeded(jobId)
 }
 ```
 
@@ -141,8 +150,8 @@ Use `Recover` at the entry point of a goroutine where a panic must never escape.
 
 ```go id="1dwqze"
 go func() {
-	defer err.Recover()
-	processMessages()
+  defer err.Recover()
+  processMessages()
 }()
 ```
 
@@ -150,7 +159,7 @@ When no handler is provided, `Recover` delegates the panic to the default uncaug
 
 ```go id="bnqk4d"
 err.SetDefaultUncaughtExceptionHandler(func(e any) {
-	log4g.Error("Uncaught exception: {}", err.PrintStackTrace(e))
+  log4g.Error("Uncaught exception: {}", err.PrintStackTrace(e))
 })
 ```
 
@@ -160,11 +169,11 @@ An explicit handler can be provided when a particular goroutine requires additio
 
 ```go id="ymu48m"
 go func() {
-	defer err.Recover(func(e any) {
-		log4g.Error("Backup job failed: {}", err.PrintStackTrace(e))
-		markBackupFailed()
-	})
-	runBackup()
+  defer err.Recover(func(e any) {
+    log4g.Error("Backup job failed: {}", err.PrintStackTrace(e))
+    markBackupFailed()
+  })
+  runBackup()
 }()
 ```
 
@@ -220,35 +229,35 @@ LOG4G INFO  Loaded configuration from config/log4g.yaml
 2026-09-04 18:45:48.332 DEBUG github.com/go-beans/go/ioc/ApplicationContext:81 - Registered *concurrent.Executor[*github.com/redis/go-redis/v9.IntCmd] [singleton publishExecutor]
 2026-09-04 18:45:48.335 DEBUG github.com/go-beans/go/ioc/ApplicationContext:81 - Registered *cron.Cron [singleton]
 2026-09-04 18:45:48.340 ERROR github.com/go-beans/go/ioc/ApplicationContext:345 - Context run failed. *err.RuntimeException: Error creating bean *app.Service1 [singleton Lifecycle]
-        at github.com/go-beans/go/ioc.(*ApplicationContext).beanInstance.func1 (D:/dev/go-beans/ioc/ApplicationContext.go:145)
-        at github.com/go-beans/go/ioc.(*ApplicationContext).beanInstance (D:/dev/go-beans/ioc/ApplicationContext.go:154)
-        at github.com/go-beans/go/ioc.(*ApplicationContext).initializeBeans.func2 (D:/dev/go-beans/ioc/ApplicationContext.go:193)
-        at github.com/go-beans/go/ioc.(*ApplicationContext).foreachBeanDefinition (D:/dev/go-beans/ioc/ApplicationContext.go:467)
-        at github.com/go-beans/go/ioc.(*ApplicationContext).initializeBeans (D:/dev/go-beans/ioc/ApplicationContext.go:190)
-        at github.com/go-beans/go/ioc.(*ApplicationContext).doRefresh (D:/dev/go-beans/ioc/ApplicationContext.go:181)
-        at github.com/go-beans/go/ioc.(*ApplicationContext).run (D:/dev/go-beans/ioc/ApplicationContext.go:293)
-        at github.com/go-beans/go/ioc.Run (D:/dev/go-beans/ioc/ioc.go:288)
-        at main.main (D:/dev/playground/cmd/app/main.go:49)
+	at github.com/go-beans/go/ioc.(*ApplicationContext).beanInstance.func1 (D:/dev/go-beans/ioc/ApplicationContext.go:145)
+	at github.com/go-beans/go/ioc.(*ApplicationContext).beanInstance (D:/dev/go-beans/ioc/ApplicationContext.go:154)
+	at github.com/go-beans/go/ioc.(*ApplicationContext).initializeBeans.func2 (D:/dev/go-beans/ioc/ApplicationContext.go:193)
+	at github.com/go-beans/go/ioc.(*ApplicationContext).foreachBeanDefinition (D:/dev/go-beans/ioc/ApplicationContext.go:467)
+	at github.com/go-beans/go/ioc.(*ApplicationContext).initializeBeans (D:/dev/go-beans/ioc/ApplicationContext.go:190)
+	at github.com/go-beans/go/ioc.(*ApplicationContext).doRefresh (D:/dev/go-beans/ioc/ApplicationContext.go:181)
+	at github.com/go-beans/go/ioc.(*ApplicationContext).run (D:/dev/go-beans/ioc/ApplicationContext.go:293)
+	at github.com/go-beans/go/ioc.Run (D:/dev/go-beans/ioc/ioc.go:288)
+	at main.main (D:/dev/playground/cmd/app/main.go:49)
 Caused by: *err.RuntimeException: Cannot bind configuration value '${db.pass}' to field 'dbPass'
-        at github.com/go-external-config/go/env.BindPropertiesAny.func1.1 (D:/dev/go-external-config/env/env.go:71)
-        at github.com/go-external-config/go/env.BindPropertiesAny (D:/dev/go-external-config/env/env.go:69)
-        at github.com/go-beans/go/ioc.(*BeanDefinitionImpl[...]).instantiate (D:/dev/go-beans/ioc/BeanDefinition.go:262)
-        at github.com/go-beans/go/ioc.(*ApplicationContext).beanInstance.func2 (D:/dev/go-beans/ioc/ApplicationContext.go:157)
-        at github.com/go-jang/go/util/concurrent.Synchronized (D:/dev/go-jang/util/concurrent/concurrent.go:11)
-        ... 8 common frames omitted
+	at github.com/go-external-config/go/env.BindPropertiesAny.func1.1 (D:/dev/go-external-config/env/env.go:71)
+	at github.com/go-external-config/go/env.BindPropertiesAny (D:/dev/go-external-config/env/env.go:69)
+	at github.com/go-beans/go/ioc.(*BeanDefinitionImpl[...]).instantiate (D:/dev/go-beans/ioc/BeanDefinition.go:262)
+	at github.com/go-beans/go/ioc.(*ApplicationContext).beanInstance.func2 (D:/dev/go-beans/ioc/ApplicationContext.go:157)
+	at github.com/go-jang/go/util/concurrent.Synchronized (D:/dev/go-jang/util/concurrent/concurrent.go:11)
+	... 8 more
 Caused by: *err.RuntimeException: Cannot get Consul property app/db/password
-        at github.com/go-external-config/consul/env.(*ConsulPropertySource).getPropertyValue (D:/dev/go-external-config-consul/env/ConsulPropertySource.go:67)
-        at github.com/go-external-config/consul/env.(*ConsulPropertySource).Property (D:/dev/go-external-config-consul/env/ConsulPropertySource.go:58)
-        at github.com/go-external-config/go/env.(*Environment).lookupRawProperty (D:/dev/go-external-config/env/Environment.go:103)
-        at github.com/go-external-config/go/env.(*ExprProcessor).Resolve (D:/dev/go-external-config/env/ExprProcessor.go:62)
-        at github.com/go-jang/go/util/regex.(*PatternProcessor).OverrideResolve.func1 (D:/dev/go-jang/util/regex/PatternProcessor.go:73)
-        at github.com/go-jang/go/util/regex.(*PatternProcessor).ProcessRecursive (D:/dev/go-jang/util/regex/PatternProcessor.go:47)
-        at github.com/go-jang/go/util/regex.(*PatternProcessor).Process (D:/dev/go-jang/util/regex/PatternProcessor.go:24)
-        at github.com/go-external-config/go/env.(*Environment).resolveRequiredPlaceholders (D:/dev/go-external-config/env/Environment.go:115)
-        at github.com/go-external-config/go/env.ResolveRequiredPlaceholders (D:/dev/go-external-config/env/env.go:36)
-        at github.com/go-external-config/go/env.BindPropertiesAny.func1 (D:/dev/go-external-config/env/env.go:73)
-        at github.com/go-jang/go/lang/reflect.ForEachTaggedField (D:/dev/go-jang/lang/reflect/reflect.go:39)
-        ... 12 common frames omitted
+	at github.com/go-external-config/consul/env.(*ConsulPropertySource).getPropertyValue (D:/dev/go-external-config-consul/env/ConsulPropertySource.go:67)
+	at github.com/go-external-config/consul/env.(*ConsulPropertySource).Property (D:/dev/go-external-config-consul/env/ConsulPropertySource.go:58)
+	at github.com/go-external-config/go/env.(*Environment).lookupRawProperty (D:/dev/go-external-config/env/Environment.go:103)
+	at github.com/go-external-config/go/env.(*ExprProcessor).Resolve (D:/dev/go-external-config/env/ExprProcessor.go:62)
+	at github.com/go-jang/go/util/regex.(*PatternProcessor).OverrideResolve.func1 (D:/dev/go-jang/util/regex/PatternProcessor.go:73)
+	at github.com/go-jang/go/util/regex.(*PatternProcessor).ProcessRecursive (D:/dev/go-jang/util/regex/PatternProcessor.go:47)
+	at github.com/go-jang/go/util/regex.(*PatternProcessor).Process (D:/dev/go-jang/util/regex/PatternProcessor.go:24)
+	at github.com/go-external-config/go/env.(*Environment).resolveRequiredPlaceholders (D:/dev/go-external-config/env/Environment.go:115)
+	at github.com/go-external-config/go/env.ResolveRequiredPlaceholders (D:/dev/go-external-config/env/env.go:36)
+	at github.com/go-external-config/go/env.BindPropertiesAny.func1 (D:/dev/go-external-config/env/env.go:73)
+	at github.com/go-jang/go/lang/reflect.ForEachTaggedField (D:/dev/go-jang/lang/reflect/reflect.go:39)
+	... 12 more
 Caused by: *url.Error: Get "http://127.0.0.1:8500/v1/kv/app/db/password"
 Caused by: *net.OpError: dial tcp 127.0.0.1:8500
 Caused by: *os.SyscallError: connectex
