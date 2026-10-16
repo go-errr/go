@@ -464,7 +464,7 @@ func PrintStackTrace(e any) string {
 		common := commonTailFrames(parentFrames, frames)
 		writeFrames(&b, frames[:len(frames)-common])
 		if common > 0 {
-			fmt.Fprintf(&b, "\t... %d common frames omitted\n", common)
+			fmt.Fprintf(&b, "\t... %d more\n", common)
 		}
 	}
 
